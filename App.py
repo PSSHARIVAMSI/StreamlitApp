@@ -839,6 +839,7 @@ if __name__ == "__main__":
 
     from selenium import webdriver
     from selenium.webdriver.chrome.options import Options
+    from selenium.webdriver.chrome.service import Service
     from selenium.webdriver.common.by import By
     from selenium.webdriver.support.ui import WebDriverWait
     from selenium.webdriver.support import expected_conditions as EC
@@ -848,25 +849,17 @@ if __name__ == "__main__":
     import time
 
     def setup_driver():
-        from selenium.webdriver.chrome.options import Options
-        from selenium.webdriver.chrome.service import Service
         chrome_options = Options()
-        chrome_options.add_argument("--headless=new")
+        chrome_options.add_argument("--headless=new")        # headless for Chrome ≥109
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-dev-shm-usage")
 
-        # ♦️  REMOVE the anti‑JS flags:
-        # chrome_options.add_argument("--disable-images")
-        # chrome_options.add_argument("--disable-javascript")
-        # chrome_options.add_argument("--disable-plugins")
-
-        # (keep the anti‑bot switches, they don’t hurt)
+        # keep these two anti‑bot switches; they don't disable JS
         chrome_options.add_argument("--disable-blink-features=AutomationControlled")
         chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-        chrome_options.add_experimental_option("useAutomationExtension", False)
 
         chrome_options.binary_location = "/usr/bin/chromium"
-        service = Service("/usr/bin/chromedriver")
+        service = Service("/usr/bin/chromedriver")           # version‑matched driver
         return webdriver.Chrome(service=service, options=chrome_options)
 
     def setup_driver_old():
@@ -1088,19 +1081,19 @@ if __name__ == "__main__":
             
             st.write(f"Navigating to: {url}")
             driver.get(url)
-            
-            # Wait for page to load
-            st.write("Waiting for page to load...")
-            WebDriverWait(driver, 20).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, "div.issue-item"))
-            )
-            
+
+            # ➊ Dismiss OneTrust cookie banner if it appears.
             try:
                 WebDriverWait(driver, 5).until(
                     EC.element_to_be_clickable((By.ID, "onetrust-accept-btn-handler"))
                 ).click()
             except Exception:
-                pass           # banner not present – fine
+                pass  # banner not present – fine
+
+            # ➋ Wait until at least one article card is in the DOM
+            WebDriverWait(driver, 20).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, "div.issue-item, div.issue-item-container"))
+            )
 
             # Additional wait for dynamic content
             time.sleep(3)
