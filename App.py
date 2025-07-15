@@ -847,33 +847,49 @@ if __name__ == "__main__":
     import re
     import time
 
+    # def setup_driver():
+    #     # Set up Chrome driver with options to bypass anti-bot detection
+    #     chrome_options = Options()
+        
+    #     # Anti-detection options
+    #     chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+    #     chrome_options.add_argument("--disable-dev-shm-usage")
+    #     chrome_options.add_argument("--no-sandbox")
+    #     chrome_options.add_argument("--disable-extensions")
+    #     chrome_options.add_argument("--disable-plugins")
+    #     chrome_options.add_argument("--disable-images")
+    #     chrome_options.add_argument("--disable-javascript")
+    #     chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    #     chrome_options.add_experimental_option('useAutomationExtension', False)
+        
+    #     # User agent
+    #     chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        
+    #     # Comment out the next line if you want to see the browser window
+    #     chrome_options.add_argument("--headless")
+        
+    #     driver = webdriver.Chrome(options=chrome_options)
+        
+    #     # Execute script to hide webdriver property
+    #     driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+        
+    #     return driver
+
+    from selenium.webdriver.chrome.service import Service
+    from webdriver_manager.chrome import ChromeDriverManager
+
     def setup_driver():
-        # Set up Chrome driver with options to bypass anti-bot detection
         chrome_options = Options()
-        
-        # Anti-detection options
-        chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--headless=new")      # ≥ Chrome 109
         chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--disable-blink-features=AutomationControlled")
         chrome_options.add_argument("--disable-extensions")
-        chrome_options.add_argument("--disable-plugins")
-        chrome_options.add_argument("--disable-images")
-        chrome_options.add_argument("--disable-javascript")
-        chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-        chrome_options.add_experimental_option('useAutomationExtension', False)
-        
-        # User agent
-        chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-        
-        # Comment out the next line if you want to see the browser window
-        chrome_options.add_argument("--headless")
-        
-        driver = webdriver.Chrome(options=chrome_options)
-        
-        # Execute script to hide webdriver property
-        driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-        
-        return driver
+        chrome_options.add_experimental_option("excludeSwitches", ["enable-logging"])
+        chrome_options.add_experimental_option("useAutomationExtension", False)
+
+        service = Service(ChromeDriverManager().install())
+        return webdriver.Chrome(service=service, options=chrome_options)
 
     def _find_first_publish_date(elem) -> str:
         #Look anywhere inside *elem* for text like First published online November 16, 2024' or 'First Published January 3 2025'
