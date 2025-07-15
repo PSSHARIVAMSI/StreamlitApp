@@ -11,8 +11,12 @@ st.set_page_config(page_title="Assignments Demo", layout="centered")
 def show_assignment_1():
     """Assignment 1: Json to csv flattening, summarization, visualization."""
     st.subheader("Assignment 1 - Json to csv flattening, Data Summarization & Visualization")
-
-    # ---------- sample code to display ----------
+    st.write("---")
+    st.write("R Programming")
+    st.write("Click the below button to view the R Markdown report for Assignment 1:")
+    st.link_button("R Markdown for Assignment 1", "https://rpubs.com/spullipu/1329879")
+    st.write("---")
+    st.write("Python Programming")
     code_a1 = """
 #!/usr/bin/env python3
 '''
@@ -499,9 +503,16 @@ if __name__ == "__main__":
     if __name__ == "__main__":
         main()
 
+
 def show_assignment_2():
     """Render Assignment 2 with selectable approaches."""
     st.subheader("Assignment 2 - Web Scraping & Data Extraction")
+    st.write("---")
+    st.write("R Programming")
+    st.write("Click the below button to view the R Markdown report for Assignment 2:")
+    st.link_button("R Markdown for Assignment 2", "https://rpubs.com/spullipu/1329862")
+    st.write("---")
+    st.write("Python Programming")
 
     approach = st.radio("Select an approach:", ("Approach 1 - Manual", "Approach 2 - Selenium"))
     st.write("The Web Page to scrape is: https://journals.sagepub.com/toc/JMX/current")
