@@ -877,19 +877,31 @@ if __name__ == "__main__":
 
     from selenium.webdriver.chrome.service import Service
     from webdriver_manager.chrome import ChromeDriverManager
-
+   
     def setup_driver():
         chrome_options = Options()
-        chrome_options.add_argument("--headless=new")      # ≥ Chrome 109
+        chrome_options.add_argument("--headless=new")
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-dev-shm-usage")
-        chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-        chrome_options.add_argument("--disable-extensions")
-        chrome_options.add_experimental_option("excludeSwitches", ["enable-logging"])
-        chrome_options.add_experimental_option("useAutomationExtension", False)
 
-        service = Service(ChromeDriverManager().install())
+        # Force driver version that matches the browser (120.*)
+        driver_path = ChromeDriverManager(version="120.0.6099.224").install()
+        service = Service(driver_path)
         return webdriver.Chrome(service=service, options=chrome_options)
+
+        # chrome_options = Options()
+        # chrome_options.add_argument("--headless=new")      # ≥ Chrome 109
+        # chrome_options.add_argument("--no-sandbox")
+        # chrome_options.add_argument("--disable-dev-shm-usage")
+        # chrome_options.binary_location = "/usr/bin/chromium"      # ← Debian path
+        # chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+        # chrome_options.add_argument("--disable-extensions")
+        # chrome_options.add_experimental_option("excludeSwitches", ["enable-logging"])
+        # chrome_options.add_experimental_option("useAutomationExtension", False)
+
+        # # service = Service(ChromeDriverManager().install())
+        # service = Service("/usr/bin/chromedriver")                # ← Matches v120
+        # return webdriver.Chrome(service=service, options=chrome_options)
 
     def _find_first_publish_date(elem) -> str:
         #Look anywhere inside *elem* for text like First published online November 16, 2024' or 'First Published January 3 2025'
