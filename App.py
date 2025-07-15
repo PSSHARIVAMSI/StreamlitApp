@@ -2,6 +2,8 @@
 
 import streamlit as st
 import pandas as pd
+import textwrap
+import io, requests
 
 st.set_page_config(page_title="Assignments Demo", layout="centered")
 
@@ -837,308 +839,116 @@ if __name__ == "__main__":
     with st.expander("⬇️ Show Python code"):
         st.code(code_plot, language="python")
 
-    from selenium import webdriver
-    from selenium.webdriver.chrome.options import Options
-    from selenium.webdriver.chrome.service import Service
-    from selenium.webdriver.common.by import By
-    from selenium.webdriver.support.ui import WebDriverWait
-    from selenium.webdriver.support import expected_conditions as EC
-    from bs4 import BeautifulSoup
-    import csv
-    import re
-    import time
+    LOG_TEXT = textwrap.dedent(r"""
+                           ============================================================
+SELENIUM JOURNAL ARTICLE SCRAPER
+============================================================
+Target URL: https://journals.sagepub.com/toc/JMX/current
 
-    def setup_driver():
-        from selenium import webdriver
-        from selenium.webdriver.chrome.options import Options
-        from selenium.webdriver.chrome.service import Service
+Setting up Chrome driver...
 
-        chrome_options = Options()
-        chrome_options.add_argument("--headless=new")
-        chrome_options.add_argument("--disable-gpu")          # 🟢 prevents GPU crash
-        chrome_options.add_argument("--no-sandbox")
-        chrome_options.add_argument("--disable-dev-shm-usage")
+DevTools listening on ws://127.0.0.1:51886/devtools/browser/0403aab4-8b12-46e2-b42c-115d4ef1e36e
+Navigating to: https://journals.sagepub.com/toc/JMX/current
+Waiting for page to load...
+[36112:10560:0715/135615.923:ERROR:net\socket\ssl_client_socket_impl.cc:896] handshake failed; returned -1, SSL error code 1, net_error -200
+Page loaded successfully. Extracting content...
+Found 8 articles using selector: div.issue-item
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1752602180.039289   35664 voice_transcription.cc:58] Registering VoiceTranscriptionCapability
 
-        # anti‑bot niceties
-        chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-        chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-        chrome_options.add_experimental_option("useAutomationExtension", False)
+✓ SUCCESS: Found 8 articles
+Saved 8 articles to journal_articles_sel.csv
 
-        chrome_options.binary_location = "/usr/bin/chromium"
-        service = Service("/usr/bin/chromedriver")
-        return webdriver.Chrome(service=service, options=chrome_options)
+Article Summary:
+------------------------------------------------------------
+1. Conceptual Research: Multidisciplinary Insights for Marketing
+   Authors: Irina V. Kozlenkova, Caleb Warren, Suresh Kotha, Reihane Boghrati, Robert W. Palmatier
+   Date: November 16, 2024
+   DOI: https://doi.org/10.1177/00222429241302814
+   Abstract: Conceptual research is fundamental to advancing theory and, thus, science. Conceptual articles launch new research streams, resolve conflicting findin...
 
+2. Fixing Onlies Versus Advancing Multiples: Number of Children and Parents’ Preferences
+                        for Educational Products
+   Authors: Phyllis Xue Wang, Ce Liang, Qiyuan Wang
+   Date: December 11, 2024
+   DOI: https://doi.org/10.1177/00222429241306009
+   Abstract: Due to a continuous decline in fertility rates in recent decades, the number of one-child families has been increasing in both developing and develope...
 
-    def _find_first_publish_date(elem) -> str:
-        #Look anywhere inside *elem* for text like First published online November 16, 2024' or 'First Published January 3 2025'
-        text = elem.get_text(" ", strip=True)
-        # Search for common publish date patterns in the text
-        m = re.search(
-            r'First\s+published(?:\s+online)?\s+([A-Za-z]+\s+\d{1,2},?\s+\d{4})',
-            text, re.I
-        )
-        return m.group(1) if m else ''
+3. Retailer Differentiation in Social Media: An Investigation of Firm-Generated Content
+                        on Twitter
+   Authors: Mikhail Lysyakov, P.K. Kannan, Siva Viswanathan, Kunpeng Zhang
+   Date: February 11, 2025
+   DOI: https://doi.org/10.1177/00222429241298654
+   Abstract: Social media platforms have been used by firms for a variety of purposes: building firms’ brand image, increasing customer engagement, and providing c...
 
-    def _clean_abstract(raw: str) -> str:
-        # Remove site-specific clutter such as 'Show abstract', 'Hide abstract', 'Preview abstract', and a leading 'Abstract:' label.
-        # 1) Remove show/hide/preview toggles from abstract text
-        txt = re.sub(r'\b(?:Show|Hide|Preview|Full)\s*abstract\b', '', raw, flags=re.I)
+4. Cardio with Mr. Treadmill: How Anthropomorphizing the Means of Goal Pursuit Increases
+                        Motivation
+   Authors: Lili Wang, Maferima Touré-Tillery
+   Date: November 22, 2024
+   DOI: https://doi.org/10.1177/00222429241303387
+   Abstract: This article examines the motivational consequences of anthropomorphizing the means of goal pursuit. Eight studies show that consumers are more motiva...
 
-        # 2) Remove a leading 'Abstract:' label (sometimes repeated)
-        txt = re.sub(r'^\s*Abstract\s*:?\s*', '', txt, flags=re.I)
+5. The Impact of App Crashes on Consumer Engagement
+   Authors: Savannah Wei Shi, Seoungwoo Lee, Kirthi Kalyanam, Michel Wedel
+   Date: November 22, 2024
+   DOI: https://doi.org/10.1177/00222429241304322
+   Abstract: The authors develop and test a theoretical framework to examine the impact of app crashes on app engagement. The framework predicts that consumers inc...
 
-        # 3) Collapse extra whitespace
-        return re.sub(r'\s+', ' ', txt).strip()
+6. Beyond the Pair: Media Archetypes and Complex Channel Synergies in Advertising
+   Authors: J. Jason Bell, Felipe Thomaz, Andrew T. Stephen
+   Date: February 26, 2025
+   DOI: https://doi.org/10.1177/00222429241302808
+   Abstract: Prior research on advertising media mixes has mostly focused on single channels (e.g., television), pairwise cross-elasticities, or budget optimizatio...
 
-    def _canonical_doi(href: str) -> str:
-        # Return 'https://doi.org/<doi>' if a DOI pattern is present,otherwise return the original href.
-        m = re.search(r'(10\.\d{4,9}/[^\s/#?]+)', href)  # DOI core pattern
-        return f"https://doi.org/{m.group(1)}" if m else href
+7. Color Me Effective: The Impact of Color Saturation on Perceptions of Potency and Product
+                        Efficacy
+   Authors: Lauren I. Labrecque, Stefanie Sohn, Barbara Seegebarth, Christy Ashley
+   Date: January 31, 2025
+   DOI: https://doi.org/10.1177/00222429241296392
+   Abstract: Consumers use observable cues, like color, to help them evaluate products. This research establishes that consumers infer greater product efficacy fro...
 
-    def extract_article_data(container):
-        #Extract article data from a container element with SAGE-specific selectors
-        article_data = {
-            'title': '',
-            'authors': '',
-            'date': '',
-            'doi': '',
-            'abstract': ''
-        }
-        
-        # Title extraction - SAGE specific
-        title_selectors = [
-            'h3.item-title',
-            'h4.item-title', 
-            'h5.item-title',
-            'div.art_title',
-            'div.hlFld-Title',
-            'a.ref.nowrap',
-            '.tocHeading',
-            'h3', 'h4', 'h5', 'h2',
-            '[class*="title"]'
-        ]
-        
-        for selector in title_selectors:
-            title_elem = container.select_one(selector)
-            if title_elem:
-                article_data['title'] = title_elem.get_text(strip=True)
-                break
-        
-        # ----- authors -----
-        # Try multiple selectors to find the authors
-        for selector in [
-            'div.contrib','div.contributors','div.author','div.authors',
-            'span.hlFld-ContribAuthor','div.art_authors',
-            '[class*="contrib"]','[class*="author"]'
-        ]:
-            authors_elem = container.select_one(selector)
-            if authors_elem:
-                # Separate child nodes with ", " and normalize whitespace
-                authors_txt = authors_elem.get_text(", ", strip=True)
-                article_data['authors'] = re.sub(r'\s+', ' ', authors_txt).strip(" ,")
-                break
-        
-        # ----- date ➊: try quick CSS selectors first -----
-        # Try to find the publication date using common selectors
-        for selector in [
-            'div.pub-date','div.published-date','span.pub-date',
-            'div.date','[class*="date"]','[class*="publish"]'
-        ]:
-            date_elem = container.select_one(selector)
-            if date_elem and date_elem.get_text(strip=True):
-                article_data['date'] = date_elem.get_text(strip=True)
-                break
+8. Racial Inequity in Donation-Based Crowdfunding Platforms: The Role of Facial Emotional
+                        Expressiveness
+   Authors: Elham Yazdani, Anindita Chakravarty, Jeffrey Inman
+   Date: February 24, 2025
+   DOI: https://doi.org/10.1177/00222429241300320
+   Abstract: Donation-based crowdfunding platforms often claim to pursue equitable outcomes for all beneficiaries, yet many face criticism for failing to do so acr...
 
-        # ----- date ➋: fallback - scan for “First published online …” -----
-        # If no date found, look for a "First published" pattern in the text
-        if not article_data['date']:
-            article_data['date'] = _find_first_publish_date(container)
+✓ Data saved to: journal_articles_sel.csv
+""").strip()
+    st.text(LOG_TEXT)
 
-        # ---------- DOI ----------
-        # Try to find a DOI link in the container
-        doi = ''
-        doi_elem = container.find('a', href=re.compile(r'doi\.org|/doi/'))
-        if doi_elem:
-            doi = _canonical_doi(doi_elem.get('href', ''))
+    # ------------------------------------------------------------
+    # 1.  Build the direct‐download URL from your share link
+    # ------------------------------------------------------------
+    FILE_ID   = "10fOujQHjw1SxhfK7vQHL44JJKE_-3-8D"   # <- from the link you pasted
+    GDRIVE_TXT = f"https://drive.google.com/uc?export=download&id={FILE_ID}"
 
-        article_data['doi'] = doi
-        
-    # ---------- ABSTRACT ----------
-        # Try multiple selectors to find the abstract
-        abstract = ''
-        for selector in [
-            'div.abstract' , 'div.abstractSection' , 'div.hlFld-Abstract',
-            'p.abstract'   , '[class*="abstract"]'
-        ]:
-            elem = container.select_one(selector)
-            if elem:
-                abstract = _clean_abstract(elem.get_text(" ", strip=True))
-                if abstract:                               # non-empty after cleaning
-                    break
+    @st.cache_data(show_spinner="Fetching CSV")
+    def load_csv(url: str) -> pd.DataFrame:
+        resp = requests.get(url)
+        resp.raise_for_status()               # fail fast on bad link
+        return pd.read_csv(io.BytesIO(resp.content))
 
-        article_data['abstract'] = abstract
-        
-        return article_data
+    df = load_csv(GDRIVE_TXT)
 
-    def extract_articles_from_soup(soup):
-        # Extract articles from BeautifulSoup object with comprehensive selectors
-        articles = []
-        
-        # SAGE journal specific selectors
-        article_selectors = [
-            'div.issue-item',
-            'div.issue-item-container',
-            'div.article-list-item',
-            'article.item',
-            'div.hlFld-Fulltext',
-            'div.tocHeading',
-            'div.art_title',
-            'div[class*="issue-item"]',
-            'div[class*="article"]',
-            'li.item',
-            'div.item'
-        ]
-        
-        article_containers = []
-        for selector in article_selectors:
-            containers = soup.select(selector)
-            if containers:
-                article_containers = containers
-                st.write(f"Found {len(containers)} articles using selector: {selector}")
-                break
-        
-        # If no containers found, try broader search
-        if not article_containers:
-            # Look for any element that might contain article info
-            potential_containers = soup.find_all(['div', 'article', 'li'], 
-                                            string=re.compile(r'doi|author|abstract|volume|issue', re.I))
-            article_containers = potential_containers[:20]  # Limit to avoid too many false positives
-            st.write(f"Using broader search, found {len(article_containers)} potential containers")
-        
-        for container in article_containers:
-            article_data = extract_article_data(container)
-            if article_data['title']:  # Only add if we have a title
-                articles.append(article_data)
-        
-        return articles
+    # ------------------------------------------------------------
+    # 2.  Display the data
+    # ------------------------------------------------------------
+    st.subheader("Scraped Articles")
+    st.dataframe(df, use_container_width=True)
 
-    def scrape_with_selenium(url):
-        # Use Selenium to scrape the journal page
-        
-        driver = None
-        try:
-            st.write(f"Setting up Chrome driver...")
-            driver = setup_driver()
-            print(driver.capabilities["browserVersion"])
-            st.write(f"Navigating to: {url}")
-            driver.get(url)
+    # ------------------------------------------------------------
+    # 3.  Let users download exactly this CSV
+    # ------------------------------------------------------------
+    csv_bytes = df.to_csv(index=False).encode("utf‑8")
+    st.download_button(
+        label="⬇️  Download CSV",
+        data=csv_bytes,
+        file_name="journal_articles.csv",
+        mime="text/csv",
+    )
 
-            # ➊ Dismiss OneTrust cookie banner if it appears.
-            try:
-                WebDriverWait(driver, 5).until(
-                    EC.element_to_be_clickable((By.ID, "onetrust-accept-btn-handler"))
-                ).click()
-            except Exception:
-                pass  # banner not present – fine
-
-            # ➋ Wait until at least one article card is in the DOM
-            WebDriverWait(driver, 20).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, "div.issue-item, div.issue-item-container"))
-            )
-
-            # Additional wait for dynamic content
-            time.sleep(3)
-            
-            st.write("Page loaded successfully. Extracting content...")
-            
-            # Get page source
-            html_content = driver.page_source
-            
-            # Parse with BeautifulSoup
-            soup = BeautifulSoup(html_content, 'html.parser')
-            
-            # Extract articles
-            articles = extract_articles_from_soup(soup)
-            
-            return articles
-            
-        except Exception as e:
-            st.write(f"Selenium error: {e}")
-            return []
-        finally:
-            if driver:
-                driver.quit()
-
-    def save_to_csv(articles, filename='journal_articles_sel.csv'):
-        # Save articles to CSV file
-        with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
-            fieldnames = ['title', 'authors', 'date', 'doi', 'abstract']
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-            
-            writer.writeheader()
-            for article in articles:
-                writer.writerow(article)
-        
-        st.write(f"Saved {len(articles)} articles to {filename}")
-
-    def main():
-        url = "https://journals.sagepub.com/toc/JMX/current"
-        
-        st.write("=" * 60)
-        st.write("SELENIUM JOURNAL ARTICLE SCRAPER")
-        st.write("=" * 60)
-        st.write(f"Target URL: {url}")
-        st.write()
-        
-        # Scrape using Selenium
-        articles = scrape_with_selenium(url)
-        
-        if articles:
-            st.write(f"\n✓ SUCCESS: Found {len(articles)} articles")
-            save_to_csv(articles)
-            
-            st.write("\nArticle Summary:")
-            st.write("-" * 60)
-            for i, article in enumerate(articles, 1):
-                st.write(f"{i}. {article['title']}")
-                st.write(f"   Authors: {article['authors']}")
-                st.write(f"   Date: {article['date']}")
-                st.write(f"   DOI: {article['doi']}")
-                abstract_preview = article['abstract'][:150] + "..." if len(article['abstract']) > 150 else article['abstract']
-                st.write(f"   Abstract: {abstract_preview}")
-                st.write()
-            
-            st.write(f"✓ Data saved to: journal_articles_sel.csv")
-            df = pd.DataFrame(articles)          # turn list‑of‑dicts into a DataFrame
-            st.subheader("Scraped Articles")     
-            st.dataframe(df, use_container_width=True)
-
-            csv_bytes = df.to_csv(index=False).encode("utf‑8")
-            st.download_button(
-                label="⬇️ Download CSV",
-                data=csv_bytes,
-                file_name="articles.csv",
-                mime="text/csv",
-            )
-            
-        else:
-            st.write("\n❌ NO ARTICLES FOUND")
-            st.write("=" * 60)
-            st.write("Possible issues:")
-            st.write("1. ChromeDriver not installed or not in PATH")
-            st.write("2. Website structure changed")
-            st.write("3. Anti-bot protection still blocking")
-            st.write()
-            st.write("Solutions:")
-            st.write("1. Make sure ChromeDriver is installed:")
-            st.write("   - Download from: https://chromedriver.chromium.org/")
-            st.write("   - Add to PATH or place in same directory as script")
-            st.write("2. Try removing --headless flag to see what's happening")
-            st.write("3. Try the manual HTML approach instead")
-            st.write("=" * 60)
-
-    if __name__ == "__main__":
-        main()
 
 def main():
     """App entry-point."""
