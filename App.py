@@ -848,6 +848,28 @@ if __name__ == "__main__":
     import time
 
     def setup_driver():
+        from selenium.webdriver.chrome.options import Options
+        from selenium.webdriver.chrome.service import Service
+        chrome_options = Options()
+        chrome_options.add_argument("--headless=new")
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+
+        # ♦️  REMOVE the anti‑JS flags:
+        # chrome_options.add_argument("--disable-images")
+        # chrome_options.add_argument("--disable-javascript")
+        # chrome_options.add_argument("--disable-plugins")
+
+        # (keep the anti‑bot switches, they don’t hurt)
+        chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+        chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+        chrome_options.add_experimental_option("useAutomationExtension", False)
+
+        chrome_options.binary_location = "/usr/bin/chromium"
+        service = Service("/usr/bin/chromedriver")
+        return webdriver.Chrome(service=service, options=chrome_options)
+
+    def setup_driver_old():
         # Set up Chrome driver with options to bypass anti-bot detection
         chrome_options = Options()
         
@@ -1069,10 +1091,17 @@ if __name__ == "__main__":
             
             # Wait for page to load
             st.write("Waiting for page to load...")
-            WebDriverWait(driver, 15).until(
-                EC.presence_of_element_located((By.TAG_NAME, "body"))
+            WebDriverWait(driver, 20).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, "div.issue-item"))
             )
             
+            try:
+                WebDriverWait(driver, 5).until(
+                    EC.element_to_be_clickable((By.ID, "onetrust-accept-btn-handler"))
+                ).click()
+            except Exception:
+                pass           # banner not present – fine
+
             # Additional wait for dynamic content
             time.sleep(3)
             
