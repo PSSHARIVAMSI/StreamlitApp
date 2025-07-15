@@ -172,7 +172,7 @@ def extract_articles_from_soup(soup):
         containers = soup.select(selector)
         if containers:
             article_containers = containers
-            st.write(f"Found {len(containers)} articles using selector: {selector}")
+            print(f"Found {len(containers)} articles using selector: {selector}")
             break
     
     # If no containers found, try broader search for potential article containers
@@ -200,7 +200,7 @@ def process_manual_html(html_file_path):
         return extract_articles_from_soup(soup)
         
     except Exception as e:
-        st.write(f"Error processing manual HTML file: {e}")
+        print(f"Error processing manual HTML file: {e}")
         return []
 
 def save_to_csv(articles, filename='journal_articles.csv'):
@@ -213,7 +213,7 @@ def save_to_csv(articles, filename='journal_articles.csv'):
         for article in articles:
             writer.writerow(article)
     
-    st.write(f"Saved {len(articles)} articles to {filename}")
+    print(f"Saved {len(articles)} articles to {filename}")
 
 def _google_drive_id(url: str) -> str:
     # Extract the file-ID from any Google-Drive share link.
@@ -242,40 +242,40 @@ def fetch_html_from_gdrive(url: str) -> str:
 def main():
     # Main function to orchestrate the scraping and saving process. Looks for HTML file in the Google Drive, extracts articles, and saves them to CSV.
 
-    st.write("=" * 60)
-    st.write("GOOGLE-DRIVE JOURNAL ARTICLE SCRAPER")
-    st.write("=" * 60)
+    print("=" * 60)
+    print("GOOGLE-DRIVE JOURNAL ARTICLE SCRAPER")
+    print("=" * 60)
 
     gdrive_url = (
         "https://drive.google.com/file/d/1At1Y8CbwlInSQC5fbMvyExklEEKvctli/view?usp=sharing"
     )
     try:
-        st.write("Downloading HTML from Google Drive …")
+        print("Downloading HTML from Google Drive …")
         html_content = fetch_html_from_gdrive(gdrive_url)
 
         soup = BeautifulSoup(html_content, 'html.parser')
         articles = extract_articles_from_soup(soup)
 
         if not articles:
-            st.write("❌ No articles found — did the HTML structure change?")
+            print("❌ No articles found — did the HTML structure change?")
             return
 
-        st.write("\nArticle Summary:")
-        st.write("-" * 60)
+        print("\nArticle Summary:")
+        print("-" * 60)
         for i, article in enumerate(articles, 1):
-            st.write(f"{i}. {article['title']}")
-            st.write(f"   Authors: {article['authors']}")
-            st.write(f"   Date: {article['date']}")
-            st.write(f"   DOI: {article['doi']}")
+            print(f"{i}. {article['title']}")
+            print(f"   Authors: {article['authors']}")
+            print(f"   Date: {article['date']}")
+            print(f"   DOI: {article['doi']}")
             abstract_preview = article['abstract'][:150] + "..." if len(article['abstract']) > 150 else article['abstract']
-            st.write(f"   Abstract: {abstract_preview}")
-            st.write()
+            print(f"   Abstract: {abstract_preview}")
+            print()
         
-        st.write(f"✓ SUCCESS: scraped {len(articles)} articles")
+        print(f"✓ SUCCESS: scraped {len(articles)} articles")
         save_to_csv(articles)
 
     except Exception as exc:
-        st.write(f"Download / parse error: {exc}")
+        print(f"Download / parse error: {exc}")
 
 if __name__ == "__main__":
     main()
@@ -540,13 +540,604 @@ if __name__ == "__main__":
 
 def _show_approach_2():
     """Parametric sine-squared curve as a quick demo."""
-    st.subheader("Approach 2 - Parametric Sine-Squared Plot")
+    st.subheader("Approach 2 - Using Selenium for Web Scraping")
 
     code_plot = """
-code comes here
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from bs4 import BeautifulSoup
+import csv
+import re
+import time
+
+def setup_driver():
+    # Set up Chrome driver with options to bypass anti-bot detection
+    chrome_options = Options()
+    
+    # Anti-detection options
+    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-extensions")
+    chrome_options.add_argument("--disable-plugins")
+    chrome_options.add_argument("--disable-images")
+    chrome_options.add_argument("--disable-javascript")
+    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    chrome_options.add_experimental_option('useAutomationExtension', False)
+    
+    # User agent
+    chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+    
+    # Comment out the next line if you want to see the browser window
+    chrome_options.add_argument("--headless")
+    
+    driver = webdriver.Chrome(options=chrome_options)
+    
+    # Execute script to hide webdriver property
+    driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+    
+    return driver
+
+def _find_first_publish_date(elem) -> str:
+    #Look anywhere inside *elem* for text like First published online November 16, 2024' or 'First Published January 3 2025'
+    text = elem.get_text(" ", strip=True)
+    # Search for common publish date patterns in the text
+    m = re.search(
+        r'First\s+published(?:\s+online)?\s+([A-Za-z]+\s+\d{1,2},?\s+\d{4})',
+        text, re.I
+    )
+    return m.group(1) if m else ''
+
+def _clean_abstract(raw: str) -> str:
+    # Remove site-specific clutter such as 'Show abstract', 'Hide abstract', 'Preview abstract', and a leading 'Abstract:' label.
+    # 1) Remove show/hide/preview toggles from abstract text
+    txt = re.sub(r'\b(?:Show|Hide|Preview|Full)\s*abstract\b', '', raw, flags=re.I)
+
+    # 2) Remove a leading 'Abstract:' label (sometimes repeated)
+    txt = re.sub(r'^\s*Abstract\s*:?\s*', '', txt, flags=re.I)
+
+    # 3) Collapse extra whitespace
+    return re.sub(r'\s+', ' ', txt).strip()
+
+def _canonical_doi(href: str) -> str:
+    # Return 'https://doi.org/<doi>' if a DOI pattern is present,otherwise return the original href.
+    m = re.search(r'(10\.\d{4,9}/[^\s/#?]+)', href)  # DOI core pattern
+    return f"https://doi.org/{m.group(1)}" if m else href
+
+def extract_article_data(container):
+    #Extract article data from a container element with SAGE-specific selectors
+    article_data = {
+        'title': '',
+        'authors': '',
+        'date': '',
+        'doi': '',
+        'abstract': ''
+    }
+    
+    # Title extraction - SAGE specific
+    title_selectors = [
+        'h3.item-title',
+        'h4.item-title', 
+        'h5.item-title',
+        'div.art_title',
+        'div.hlFld-Title',
+        'a.ref.nowrap',
+        '.tocHeading',
+        'h3', 'h4', 'h5', 'h2',
+        '[class*="title"]'
+    ]
+    
+    for selector in title_selectors:
+        title_elem = container.select_one(selector)
+        if title_elem:
+            article_data['title'] = title_elem.get_text(strip=True)
+            break
+    
+    # ----- authors -----
+    # Try multiple selectors to find the authors
+    for selector in [
+        'div.contrib','div.contributors','div.author','div.authors',
+        'span.hlFld-ContribAuthor','div.art_authors',
+        '[class*="contrib"]','[class*="author"]'
+    ]:
+        authors_elem = container.select_one(selector)
+        if authors_elem:
+            # Separate child nodes with ", " and normalize whitespace
+            authors_txt = authors_elem.get_text(", ", strip=True)
+            article_data['authors'] = re.sub(r'\s+', ' ', authors_txt).strip(" ,")
+            break
+    
+    # ----- date ➊: try quick CSS selectors first -----
+    # Try to find the publication date using common selectors
+    for selector in [
+        'div.pub-date','div.published-date','span.pub-date',
+        'div.date','[class*="date"]','[class*="publish"]'
+    ]:
+        date_elem = container.select_one(selector)
+        if date_elem and date_elem.get_text(strip=True):
+            article_data['date'] = date_elem.get_text(strip=True)
+            break
+
+    # ----- date ➋: fallback - scan for “First published online …” -----
+    # If no date found, look for a "First published" pattern in the text
+    if not article_data['date']:
+        article_data['date'] = _find_first_publish_date(container)
+
+    # ---------- DOI ----------
+    # Try to find a DOI link in the container
+    doi = ''
+    doi_elem = container.find('a', href=re.compile(r'doi\.org|/doi/'))
+    if doi_elem:
+        doi = _canonical_doi(doi_elem.get('href', ''))
+
+    article_data['doi'] = doi
+    
+  # ---------- ABSTRACT ----------
+    # Try multiple selectors to find the abstract
+    abstract = ''
+    for selector in [
+        'div.abstract' , 'div.abstractSection' , 'div.hlFld-Abstract',
+        'p.abstract'   , '[class*="abstract"]'
+    ]:
+        elem = container.select_one(selector)
+        if elem:
+            abstract = _clean_abstract(elem.get_text(" ", strip=True))
+            if abstract:                               # non-empty after cleaning
+                break
+
+    article_data['abstract'] = abstract
+    
+    return article_data
+
+def extract_articles_from_soup(soup):
+    # Extract articles from BeautifulSoup object with comprehensive selectors
+    articles = []
+    
+    # SAGE journal specific selectors
+    article_selectors = [
+        'div.issue-item',
+        'div.issue-item-container',
+        'div.article-list-item',
+        'article.item',
+        'div.hlFld-Fulltext',
+        'div.tocHeading',
+        'div.art_title',
+        'div[class*="issue-item"]',
+        'div[class*="article"]',
+        'li.item',
+        'div.item'
+    ]
+    
+    article_containers = []
+    for selector in article_selectors:
+        containers = soup.select(selector)
+        if containers:
+            article_containers = containers
+            print(f"Found {len(containers)} articles using selector: {selector}")
+            break
+    
+    # If no containers found, try broader search
+    if not article_containers:
+        # Look for any element that might contain article info
+        potential_containers = soup.find_all(['div', 'article', 'li'], 
+                                           string=re.compile(r'doi|author|abstract|volume|issue', re.I))
+        article_containers = potential_containers[:20]  # Limit to avoid too many false positives
+        print(f"Using broader search, found {len(article_containers)} potential containers")
+    
+    for container in article_containers:
+        article_data = extract_article_data(container)
+        if article_data['title']:  # Only add if we have a title
+            articles.append(article_data)
+    
+    return articles
+
+def scrape_with_selenium(url):
+    # Use Selenium to scrape the journal page
+    
+    driver = None
+    try:
+        print(f"Setting up Chrome driver...")
+        driver = setup_driver()
+        
+        print(f"Navigating to: {url}")
+        driver.get(url)
+        
+        # Wait for page to load
+        print("Waiting for page to load...")
+        WebDriverWait(driver, 15).until(
+            EC.presence_of_element_located((By.TAG_NAME, "body"))
+        )
+        
+        # Additional wait for dynamic content
+        time.sleep(3)
+        
+        print("Page loaded successfully. Extracting content...")
+        
+        # Get page source
+        html_content = driver.page_source
+        
+        # Parse with BeautifulSoup
+        soup = BeautifulSoup(html_content, 'html.parser')
+        
+        # Extract articles
+        articles = extract_articles_from_soup(soup)
+        
+        return articles
+        
+    except Exception as e:
+        print(f"Selenium error: {e}")
+        return []
+    finally:
+        if driver:
+            driver.quit()
+
+def save_to_csv(articles, filename='journal_articles_sel.csv'):
+    # Save articles to CSV file
+    with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
+        fieldnames = ['title', 'authors', 'date', 'doi', 'abstract']
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        
+        writer.writeheader()
+        for article in articles:
+            writer.writerow(article)
+    
+    print(f"Saved {len(articles)} articles to {filename}")
+
+def main():
+    url = "https://journals.sagepub.com/toc/JMX/current"
+    
+    print("=" * 60)
+    print("SELENIUM JOURNAL ARTICLE SCRAPER")
+    print("=" * 60)
+    print(f"Target URL: {url}")
+    print()
+    
+    # Scrape using Selenium
+    articles = scrape_with_selenium(url)
+    
+    if articles:
+        print(f"\n✓ SUCCESS: Found {len(articles)} articles")
+        save_to_csv(articles)
+        
+        print("\nArticle Summary:")
+        print("-" * 60)
+        for i, article in enumerate(articles, 1):
+            print(f"{i}. {article['title']}")
+            print(f"   Authors: {article['authors']}")
+            print(f"   Date: {article['date']}")
+            print(f"   DOI: {article['doi']}")
+            abstract_preview = article['abstract'][:150] + "..." if len(article['abstract']) > 150 else article['abstract']
+            print(f"   Abstract: {abstract_preview}")
+            print()
+        
+        print(f"✓ Data saved to: journal_articles_sel.csv")
+        
+    else:
+        print("\n❌ NO ARTICLES FOUND")
+        print("=" * 60)
+        print("Possible issues:")
+        print("1. ChromeDriver not installed or not in PATH")
+        print("2. Website structure changed")
+        print("3. Anti-bot protection still blocking")
+        print()
+        print("Solutions:")
+        print("1. Make sure ChromeDriver is installed:")
+        print("   - Download from: https://chromedriver.chromium.org/")
+        print("   - Add to PATH or place in same directory as script")
+        print("2. Try removing --headless flag to see what's happening")
+        print("3. Try the manual HTML approach instead")
+        print("=" * 60)
+
+if __name__ == "__main__":
+    main()
 """
     with st.expander("⬇️ Show Python code"):
         st.code(code_plot, language="python")
+
+    from selenium import webdriver
+    from selenium.webdriver.chrome.options import Options
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.support.ui import WebDriverWait
+    from selenium.webdriver.support import expected_conditions as EC
+    from bs4 import BeautifulSoup
+    import csv
+    import re
+    import time
+
+    def setup_driver():
+        # Set up Chrome driver with options to bypass anti-bot detection
+        chrome_options = Options()
+        
+        # Anti-detection options
+        chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-extensions")
+        chrome_options.add_argument("--disable-plugins")
+        chrome_options.add_argument("--disable-images")
+        chrome_options.add_argument("--disable-javascript")
+        chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+        chrome_options.add_experimental_option('useAutomationExtension', False)
+        
+        # User agent
+        chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        
+        # Comment out the next line if you want to see the browser window
+        chrome_options.add_argument("--headless")
+        
+        driver = webdriver.Chrome(options=chrome_options)
+        
+        # Execute script to hide webdriver property
+        driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+        
+        return driver
+
+    def _find_first_publish_date(elem) -> str:
+        #Look anywhere inside *elem* for text like First published online November 16, 2024' or 'First Published January 3 2025'
+        text = elem.get_text(" ", strip=True)
+        # Search for common publish date patterns in the text
+        m = re.search(
+            r'First\s+published(?:\s+online)?\s+([A-Za-z]+\s+\d{1,2},?\s+\d{4})',
+            text, re.I
+        )
+        return m.group(1) if m else ''
+
+    def _clean_abstract(raw: str) -> str:
+        # Remove site-specific clutter such as 'Show abstract', 'Hide abstract', 'Preview abstract', and a leading 'Abstract:' label.
+        # 1) Remove show/hide/preview toggles from abstract text
+        txt = re.sub(r'\b(?:Show|Hide|Preview|Full)\s*abstract\b', '', raw, flags=re.I)
+
+        # 2) Remove a leading 'Abstract:' label (sometimes repeated)
+        txt = re.sub(r'^\s*Abstract\s*:?\s*', '', txt, flags=re.I)
+
+        # 3) Collapse extra whitespace
+        return re.sub(r'\s+', ' ', txt).strip()
+
+    def _canonical_doi(href: str) -> str:
+        # Return 'https://doi.org/<doi>' if a DOI pattern is present,otherwise return the original href.
+        m = re.search(r'(10\.\d{4,9}/[^\s/#?]+)', href)  # DOI core pattern
+        return f"https://doi.org/{m.group(1)}" if m else href
+
+    def extract_article_data(container):
+        #Extract article data from a container element with SAGE-specific selectors
+        article_data = {
+            'title': '',
+            'authors': '',
+            'date': '',
+            'doi': '',
+            'abstract': ''
+        }
+        
+        # Title extraction - SAGE specific
+        title_selectors = [
+            'h3.item-title',
+            'h4.item-title', 
+            'h5.item-title',
+            'div.art_title',
+            'div.hlFld-Title',
+            'a.ref.nowrap',
+            '.tocHeading',
+            'h3', 'h4', 'h5', 'h2',
+            '[class*="title"]'
+        ]
+        
+        for selector in title_selectors:
+            title_elem = container.select_one(selector)
+            if title_elem:
+                article_data['title'] = title_elem.get_text(strip=True)
+                break
+        
+        # ----- authors -----
+        # Try multiple selectors to find the authors
+        for selector in [
+            'div.contrib','div.contributors','div.author','div.authors',
+            'span.hlFld-ContribAuthor','div.art_authors',
+            '[class*="contrib"]','[class*="author"]'
+        ]:
+            authors_elem = container.select_one(selector)
+            if authors_elem:
+                # Separate child nodes with ", " and normalize whitespace
+                authors_txt = authors_elem.get_text(", ", strip=True)
+                article_data['authors'] = re.sub(r'\s+', ' ', authors_txt).strip(" ,")
+                break
+        
+        # ----- date ➊: try quick CSS selectors first -----
+        # Try to find the publication date using common selectors
+        for selector in [
+            'div.pub-date','div.published-date','span.pub-date',
+            'div.date','[class*="date"]','[class*="publish"]'
+        ]:
+            date_elem = container.select_one(selector)
+            if date_elem and date_elem.get_text(strip=True):
+                article_data['date'] = date_elem.get_text(strip=True)
+                break
+
+        # ----- date ➋: fallback - scan for “First published online …” -----
+        # If no date found, look for a "First published" pattern in the text
+        if not article_data['date']:
+            article_data['date'] = _find_first_publish_date(container)
+
+        # ---------- DOI ----------
+        # Try to find a DOI link in the container
+        doi = ''
+        doi_elem = container.find('a', href=re.compile(r'doi\.org|/doi/'))
+        if doi_elem:
+            doi = _canonical_doi(doi_elem.get('href', ''))
+
+        article_data['doi'] = doi
+        
+    # ---------- ABSTRACT ----------
+        # Try multiple selectors to find the abstract
+        abstract = ''
+        for selector in [
+            'div.abstract' , 'div.abstractSection' , 'div.hlFld-Abstract',
+            'p.abstract'   , '[class*="abstract"]'
+        ]:
+            elem = container.select_one(selector)
+            if elem:
+                abstract = _clean_abstract(elem.get_text(" ", strip=True))
+                if abstract:                               # non-empty after cleaning
+                    break
+
+        article_data['abstract'] = abstract
+        
+        return article_data
+
+    def extract_articles_from_soup(soup):
+        # Extract articles from BeautifulSoup object with comprehensive selectors
+        articles = []
+        
+        # SAGE journal specific selectors
+        article_selectors = [
+            'div.issue-item',
+            'div.issue-item-container',
+            'div.article-list-item',
+            'article.item',
+            'div.hlFld-Fulltext',
+            'div.tocHeading',
+            'div.art_title',
+            'div[class*="issue-item"]',
+            'div[class*="article"]',
+            'li.item',
+            'div.item'
+        ]
+        
+        article_containers = []
+        for selector in article_selectors:
+            containers = soup.select(selector)
+            if containers:
+                article_containers = containers
+                st.write(f"Found {len(containers)} articles using selector: {selector}")
+                break
+        
+        # If no containers found, try broader search
+        if not article_containers:
+            # Look for any element that might contain article info
+            potential_containers = soup.find_all(['div', 'article', 'li'], 
+                                            string=re.compile(r'doi|author|abstract|volume|issue', re.I))
+            article_containers = potential_containers[:20]  # Limit to avoid too many false positives
+            st.write(f"Using broader search, found {len(article_containers)} potential containers")
+        
+        for container in article_containers:
+            article_data = extract_article_data(container)
+            if article_data['title']:  # Only add if we have a title
+                articles.append(article_data)
+        
+        return articles
+
+    def scrape_with_selenium(url):
+        # Use Selenium to scrape the journal page
+        
+        driver = None
+        try:
+            st.write(f"Setting up Chrome driver...")
+            driver = setup_driver()
+            
+            st.write(f"Navigating to: {url}")
+            driver.get(url)
+            
+            # Wait for page to load
+            st.write("Waiting for page to load...")
+            WebDriverWait(driver, 15).until(
+                EC.presence_of_element_located((By.TAG_NAME, "body"))
+            )
+            
+            # Additional wait for dynamic content
+            time.sleep(3)
+            
+            st.write("Page loaded successfully. Extracting content...")
+            
+            # Get page source
+            html_content = driver.page_source
+            
+            # Parse with BeautifulSoup
+            soup = BeautifulSoup(html_content, 'html.parser')
+            
+            # Extract articles
+            articles = extract_articles_from_soup(soup)
+            
+            return articles
+            
+        except Exception as e:
+            st.write(f"Selenium error: {e}")
+            return []
+        finally:
+            if driver:
+                driver.quit()
+
+    def save_to_csv(articles, filename='journal_articles_sel.csv'):
+        # Save articles to CSV file
+        with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
+            fieldnames = ['title', 'authors', 'date', 'doi', 'abstract']
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            
+            writer.writeheader()
+            for article in articles:
+                writer.writerow(article)
+        
+        st.write(f"Saved {len(articles)} articles to {filename}")
+
+    def main():
+        url = "https://journals.sagepub.com/toc/JMX/current"
+        
+        st.write("=" * 60)
+        st.write("SELENIUM JOURNAL ARTICLE SCRAPER")
+        st.write("=" * 60)
+        st.write(f"Target URL: {url}")
+        st.write()
+        
+        # Scrape using Selenium
+        articles = scrape_with_selenium(url)
+        
+        if articles:
+            st.write(f"\n✓ SUCCESS: Found {len(articles)} articles")
+            save_to_csv(articles)
+            
+            st.write("\nArticle Summary:")
+            st.write("-" * 60)
+            for i, article in enumerate(articles, 1):
+                st.write(f"{i}. {article['title']}")
+                st.write(f"   Authors: {article['authors']}")
+                st.write(f"   Date: {article['date']}")
+                st.write(f"   DOI: {article['doi']}")
+                abstract_preview = article['abstract'][:150] + "..." if len(article['abstract']) > 150 else article['abstract']
+                st.write(f"   Abstract: {abstract_preview}")
+                st.write()
+            
+            st.write(f"✓ Data saved to: journal_articles_sel.csv")
+            df = pd.DataFrame(articles)          # turn list‑of‑dicts into a DataFrame
+            st.subheader("Scraped Articles")     
+            st.dataframe(df, use_container_width=True)
+
+            csv_bytes = df.to_csv(index=False).encode("utf‑8")
+            st.download_button(
+                label="⬇️ Download CSV",
+                data=csv_bytes,
+                file_name="articles.csv",
+                mime="text/csv",
+            )
+            
+        else:
+            st.write("\n❌ NO ARTICLES FOUND")
+            st.write("=" * 60)
+            st.write("Possible issues:")
+            st.write("1. ChromeDriver not installed or not in PATH")
+            st.write("2. Website structure changed")
+            st.write("3. Anti-bot protection still blocking")
+            st.write()
+            st.write("Solutions:")
+            st.write("1. Make sure ChromeDriver is installed:")
+            st.write("   - Download from: https://chromedriver.chromium.org/")
+            st.write("   - Add to PATH or place in same directory as script")
+            st.write("2. Try removing --headless flag to see what's happening")
+            st.write("3. Try the manual HTML approach instead")
+            st.write("=" * 60)
+
+    if __name__ == "__main__":
+        main()
 
 def main():
     """App entry-point."""
