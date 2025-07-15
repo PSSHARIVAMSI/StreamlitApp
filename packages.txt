@@ -1,0 +1,11 @@
+# packages.txt  – Debian/Ubuntu packages installed via apt-get
+chromium-browser           # the browser engine
+chromium-chromedriver      # matching driver binary
+libglib2.0-0
+libnss3
+libgconf-2-4
+libfontconfig1
+libxss1
+libatk-bridge2.0-0
+libgtk-3-0
+fonts-liberation
