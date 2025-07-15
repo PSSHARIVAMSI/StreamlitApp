@@ -1,4 +1,6 @@
 streamlit
 pandas
-beautifulsoup4      # gives you 'bs4'
+beautifulsoup4
 requests
+selenium
+webdriver‑manager         # auto‑downloads the matching ChromeDriver binary
