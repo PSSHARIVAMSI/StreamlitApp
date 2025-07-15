@@ -1430,7 +1430,9 @@ Article Summary:
 def main():
     """App entry-point."""
     selection = st.sidebar.radio("Choose an assignment:", ("Assignment 1", "Assignment 2"))
-
+    st.sidebar.markdown("**Author:** Siva Mani Subrahmanya Hari Vamsi Pullipudi")
+    st.sidebar.markdown("**GMU ID:** G01505434")
+    st.sidebar.markdown("**Date:** 15th July 2025")
     if selection == "Assignment 1":
         show_assignment_1()
     else:
