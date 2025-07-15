@@ -3,4 +3,3 @@ pandas
 beautifulsoup4
 requests
 selenium
-webdriver-manager         # auto‑downloads the matching ChromeDriver binary
