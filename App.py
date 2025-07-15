@@ -14,13 +14,490 @@ def show_assignment_1():
 
     # ---------- sample code to display ----------
     code_a1 = """
-Code Comes here
+#!/usr/bin/env python3
+'''
+# Assignment 1 - JSON → CSV pipeline with enrichment & parallelism
+# ---------------------------------------------------------------
+# •  Flatten each infringing URL to its own row
+# •  Add 'domain' and 'ip_address' columns
+# •  Parallelise IP-look-ups with ≥ 4 CPUs
+# •  Produce three summary tables
+
+# Author: Siva Mani Subrahmanya Hari Vamsi
+# Date  : 15-07-2025
+'''
+
+import json
+import csv
+import socket
+from pathlib import Path
+from urllib.parse import urlparse
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from collections import Counter
+import pandas as pd
+import re, requests
+
+# -------- CONFIG -------------------------------------------------------------
+# Google Drive share‑link → file‑ID → direct‑download URL
+DRIVE_FILE_ID = "134U6xLIZUZ9sA1BW-X9TLZtUlEYCvQwz"
+INPUT_JSON = (                       # we now pass a URL, not a Path
+    f"https://drive.google.com/uc?export=download&id={DRIVE_FILE_ID}"
+)
+OUTPUT_CSV = Path("flattened_infringing_urls.csv")
+N_WORKERS  = 8
+TIMEOUT_S  = 3
+# -----------------------------------------------------------------------------
+
+def load_json(src: str | Path) -> dict:
+    '''
+    Load a JSON document from either
+      • a local file (Path / str)  - existing behaviour, or
+      • an http/https URL          - used for the public Google Drive link.
+    '''
+    src_str = str(src)
+
+    # 1️⃣ Remote file ----------------------------------------------------------
+    if src_str.startswith(("http://", "https://")):
+        # Google Drive ‘share’ links need converting to the *download* endpoint
+        m = re.search(r"/d/([^/]+)/", src_str)
+        if m:
+            file_id = m.group(1)
+            src_str = f"https://drive.google.com/uc?export=download&id={file_id}"
+
+        # small files (<100 MB) download in one go; large files may need a second
+        with requests.Session() as sess:
+            r = sess.get(src_str, timeout=30, stream=True)
+            # If we hit Drive’s virus‑scan / confirm page, grab the token & resend
+            if "content-disposition" not in r.headers:
+                for k, v in r.cookies.items():
+                    if k.startswith("download_warning"):
+                        r = sess.get(src_str, params={"confirm": v}, timeout=30)
+                        break
+            r.raise_for_status()
+            return r.json()
+
+    # 2️⃣ Local file -----------------------------------------------------------
+    with Path(src_str).open("r", encoding="utf-8") as f:
+        return json.load(f)
+
+def flatten_notices(raw: dict) -> list[dict]:
+    '''
+    Flatten the nested JSON structure so each infringing URL gets its own
+    dictionary (future CSV row). Extracts relevant fields from each notice.
+    '''
+    rows = []
+    for notice in raw.get("notices", []):
+        base = {
+            "notice_id":  notice.get("id"),
+            "title":      notice.get("title"),
+            "sender":     notice.get("sender_name"),
+            "principal":  notice.get("principal_name"),
+            "recipient":  notice.get("recipient_name"),
+            "date_sent":  notice.get("date_sent"),
+        }
+
+        for work in notice.get("works", []):
+            description = work.get("description")
+            for item in work.get("infringing_urls", []):
+                url = item.get("url")
+                rows.append(
+                    {
+                        **base,
+                        "description":    description,
+                        "infringing_url": url,
+                        "domain":         urlparse(url).netloc.lower(),  # Extract domain from URL
+                    }
+                )
+    return rows
+
+
+def resolve_ip(domain: str) -> str:
+    '''
+    Return the IPv4 address for a domain.
+    Returns 'N/A' if the lookup fails (e.g., DNS error or timeout).
+    '''
+    try:
+        socket.setdefaulttimeout(TIMEOUT_S)
+        return socket.gethostbyname(domain)
+    except OSError:
+        return "N/A"
+
+
+def enrich_with_ip(rows: list[dict]) -> None:
+    '''
+    Perform parallel DNS look-ups using a thread pool.
+    Adds an 'ip_address' key to each row in-place.
+    Caches results so each domain is only looked up once.
+    '''
+    unique_domains = {row["domain"] for row in rows}
+    ip_cache: dict[str, str] = {}
+
+    # Submit DNS lookups in parallel
+    with ThreadPoolExecutor(max_workers=N_WORKERS) as pool:
+        future_to_domain = {pool.submit(resolve_ip, d): d for d in unique_domains}
+        for future in as_completed(future_to_domain):
+            dom = future_to_domain[future]
+            ip_cache[dom] = future.result()
+
+    # Assign resolved IPs back to each row
+    for row in rows:
+        row["ip_address"] = ip_cache[row["domain"]]
+
+
+def write_csv(rows: list[dict], out_path: Path) -> None:
+    '''
+    Write the list of dictionaries to a CSV file.
+    Raises an error if there is no data.
+    '''
+    if not rows:
+        raise ValueError("No data extracted – check input file.")
+    fields = list(rows[0].keys())
+    with out_path.open("w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=fields)
+        w.writeheader()
+        w.writerows(rows)
+
+
+def summarise(rows: list[dict]) -> None:
+    '''
+    Print three summary tables:
+    - Top 5 Principals
+    - Top 5 Infringing Domains
+    - Top 5 Recipients
+    '''
+    principals = Counter(r["principal"] for r in rows).most_common(5)
+    domains    = Counter(r["domain"]   for r in rows).most_common(5)
+    recipients = Counter(r["recipient"] for r in rows).most_common(5)
+
+    print("\nTop 5 Principals:")
+    for p, n in principals:
+        print(f"  {p:<30}  {n:>6}")
+
+    print("\nTop 5 Infringing Domains:")
+    for d, n in domains:
+        print(f"  {d:<30}  {n:>6}")
+
+    print("\nTop 5 Recipients:")
+    for r, n in recipients:
+        print(f"  {r:<30}  {n:>6}")
+
+def main() -> None:
+    '''
+    Main pipeline:
+    - Load JSON data
+    - Flatten notices to rows
+    - Enrich with IP addresses (parallel DNS)
+    - Clean/standardize principal and domain names
+    - Print summary insights
+    - Write output CSV
+    '''
+    raw   = load_json(INPUT_JSON)
+    rows  = flatten_notices(raw)
+    enrich_with_ip(rows)
+
+    df = pd.DataFrame(rows)
+    def tidy_principal(name: str) -> str:
+        '''
+        Standardize principal names: lowercase, remove punctuation,
+        remove 'inc', collapse whitespace, and title-case.
+        '''
+        if pd.isna(name):
+            return "Unknown"
+        n = name.lower()
+        n = re.sub(r'[,.\']', '', n)          # remove punctuation
+        n = n.replace(' inc', '').strip()
+        n = re.sub(r'\s+', ' ', n)
+        return n.title()
+
+    df["principal_clean"] = df["principal"].apply(tidy_principal)
+
+    def root_domain(d: str) -> str:
+        '''
+        Extract the root domain (last two labels) and remove 'www.' prefix.
+        '''
+        if pd.isna(d):
+            return "unknown"
+        d = d.lower()
+        d = re.sub(r'^www\d*\.', '', d)       # drop www., www2. etc.
+        return '.'.join(d.split('.')[-2:])    # keep last two labels
+
+    df["root_domain"] = df["domain"].apply(root_domain)
+
+    print("\n🔸 Top Principals (cleaned):")
+    print(df["principal_clean"].value_counts().head(10))
+
+    print("\n🔸 Top Root Domains:")
+    print(df["root_domain"].value_counts().head(10))
+
+    # 2a. Notice volume over time (monthly trend)
+    df["month"] = pd.to_datetime(df["date_sent"], utc=True).dt.tz_localize(None).dt.to_period("M")
+
+    trend = df.groupby("month").size()
+    print("\n🔸 Monthly notice volume (last 12):")
+    print(trend.tail(12))
+
+    # 2b. IP addresses hosting many distinct domains
+    ip_hosting = (df.groupby("ip_address")["root_domain"]
+                    .nunique()
+                    .sort_values(ascending=False)
+                    .head(10))
+    ip_hosting = ip_hosting[ip_hosting.index != "N/A"]
+
+    print("\n🔸 IPs hosting the most *unique* infringing domains:")
+    print(ip_hosting)
+
+    # Write the enriched and flattened data to CSV
+    write_csv(rows, OUTPUT_CSV)
+
+print(f"\n✅  CSV written to: {OUTPUT_CSV.resolve()}")
+
+if __name__ == "__main__":
+    main()
 """
     with st.expander("⬇️ Show Python code"):
         st.code(code_a1, language="python")
 
     # ---------- execute the code ----------
+    import json
+    import csv
+    import socket
+    from pathlib import Path
+    from urllib.parse import urlparse
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from collections import Counter
+    import pandas as pd
+    import re, requests
 
+    # -------- CONFIG -------------------------------------------------------------
+    # Google Drive share‑link → file‑ID → direct‑download URL
+    DRIVE_FILE_ID = "134U6xLIZUZ9sA1BW-X9TLZtUlEYCvQwz"
+    INPUT_JSON = (                       # we now pass a URL, not a Path
+        f"https://drive.google.com/uc?export=download&id={DRIVE_FILE_ID}"
+    )
+    OUTPUT_CSV = Path("flattened_infringing_urls.csv")
+    N_WORKERS  = 8
+    TIMEOUT_S  = 3
+    # -----------------------------------------------------------------------------
+
+    def load_json(src: str | Path) -> dict:
+        '''
+        Load a JSON document from either
+        • a local file (Path / str)  - existing behaviour, or
+        • an http/https URL          - used for the public Google Drive link.
+        '''
+        src_str = str(src)
+
+        # 1️⃣ Remote file ----------------------------------------------------------
+        if src_str.startswith(("http://", "https://")):
+            # Google Drive ‘share’ links need converting to the *download* endpoint
+            m = re.search(r"/d/([^/]+)/", src_str)
+            if m:
+                file_id = m.group(1)
+                src_str = f"https://drive.google.com/uc?export=download&id={file_id}"
+
+            # small files (<100 MB) download in one go; large files may need a second
+            with requests.Session() as sess:
+                r = sess.get(src_str, timeout=30, stream=True)
+                # If we hit Drive’s virus‑scan / confirm page, grab the token & resend
+                if "content-disposition" not in r.headers:
+                    for k, v in r.cookies.items():
+                        if k.startswith("download_warning"):
+                            r = sess.get(src_str, params={"confirm": v}, timeout=30)
+                            break
+                r.raise_for_status()
+                return r.json()
+
+        # 2️⃣ Local file -----------------------------------------------------------
+        with Path(src_str).open("r", encoding="utf-8") as f:
+            return json.load(f)
+
+    def flatten_notices(raw: dict) -> list[dict]:
+        '''
+        Flatten the nested JSON structure so each infringing URL gets its own
+        dictionary (future CSV row). Extracts relevant fields from each notice.
+        '''
+        rows = []
+        for notice in raw.get("notices", []):
+            base = {
+                "notice_id":  notice.get("id"),
+                "title":      notice.get("title"),
+                "sender":     notice.get("sender_name"),
+                "principal":  notice.get("principal_name"),
+                "recipient":  notice.get("recipient_name"),
+                "date_sent":  notice.get("date_sent"),
+            }
+
+            for work in notice.get("works", []):
+                description = work.get("description")
+                for item in work.get("infringing_urls", []):
+                    url = item.get("url")
+                    rows.append(
+                        {
+                            **base,
+                            "description":    description,
+                            "infringing_url": url,
+                            "domain":         urlparse(url).netloc.lower(),  # Extract domain from URL
+                        }
+                    )
+        return rows
+
+
+    def resolve_ip(domain: str) -> str:
+        '''
+        Return the IPv4 address for a domain.
+        Returns 'N/A' if the lookup fails (e.g., DNS error or timeout).
+        '''
+        try:
+            socket.setdefaulttimeout(TIMEOUT_S)
+            return socket.gethostbyname(domain)
+        except OSError:
+            return "N/A"
+
+
+    def enrich_with_ip(rows: list[dict]) -> None:
+        '''
+        Perform parallel DNS look-ups using a thread pool.
+        Adds an 'ip_address' key to each row in-place.
+        Caches results so each domain is only looked up once.
+        '''
+        unique_domains = {row["domain"] for row in rows}
+        ip_cache: dict[str, str] = {}
+
+        # Submit DNS lookups in parallel
+        with ThreadPoolExecutor(max_workers=N_WORKERS) as pool:
+            future_to_domain = {pool.submit(resolve_ip, d): d for d in unique_domains}
+            for future in as_completed(future_to_domain):
+                dom = future_to_domain[future]
+                ip_cache[dom] = future.result()
+
+        # Assign resolved IPs back to each row
+        for row in rows:
+            row["ip_address"] = ip_cache[row["domain"]]
+
+
+    def write_csv(rows: list[dict], out_path: Path) -> None:
+        '''
+        Write the list of dictionaries to a CSV file.
+        Raises an error if there is no data.
+        '''
+        if not rows:
+            raise ValueError("No data extracted – check input file.")
+        fields = list(rows[0].keys())
+        with out_path.open("w", newline="", encoding="utf-8") as f:
+            w = csv.DictWriter(f, fieldnames=fields)
+            w.writeheader()
+            w.writerows(rows)
+
+
+    def summarise(rows: list[dict]) -> None:
+        '''
+        st.write three summary tables:
+        - Top 5 Principals
+        - Top 5 Infringing Domains
+        - Top 5 Recipients
+        '''
+        principals = Counter(r["principal"] for r in rows).most_common(5)
+        domains    = Counter(r["domain"]   for r in rows).most_common(5)
+        recipients = Counter(r["recipient"] for r in rows).most_common(5)
+
+        st.write("\nTop 5 Principals:")
+        for p, n in principals:
+            st.write(f"  {p:<30}  {n:>6}")
+
+        st.write("\nTop 5 Infringing Domains:")
+        for d, n in domains:
+            st.write(f"  {d:<30}  {n:>6}")
+
+        st.write("\nTop 5 Recipients:")
+        for r, n in recipients:
+            st.write(f"  {r:<30}  {n:>6}")
+
+    def main() -> None:
+        '''
+        Main pipeline:
+        - Load JSON data
+        - Flatten notices to rows
+        - Enrich with IP addresses (parallel DNS)
+        - Clean/standardize principal and domain names
+        - st.ite summary insights
+        - Write output CSV
+        '''
+        raw   = load_json(INPUT_JSON)
+        rows  = flatten_notices(raw)
+        enrich_with_ip(rows)
+
+        df = pd.DataFrame(rows)
+        def tidy_principal(name: str) -> str:
+            '''
+            Standardize principal names: lowercase, remove punctuation,
+            remove 'inc', collapse whitespace, and title-case.
+            '''
+            if pd.isna(name):
+                return "Unknown"
+            n = name.lower()
+            n = re.sub(r'[,.\']', '', n)          # remove punctuation
+            n = n.replace(' inc', '').strip()
+            n = re.sub(r'\s+', ' ', n)
+            return n.title()
+
+        df["principal_clean"] = df["principal"].apply(tidy_principal)
+
+        def root_domain(d: str) -> str:
+            '''
+            Extract the root domain (last two labels) and remove 'www.' prefix.
+            '''
+            if pd.isna(d):
+                return "unknown"
+            d = d.lower()
+            d = re.sub(r'^www\d*\.', '', d)       # drop www., www2. etc.
+            return '.'.join(d.split('.')[-2:])    # keep last two labels
+
+        df["root_domain"] = df["domain"].apply(root_domain)
+        df_final = pd.DataFrame(rows)          # turn list‑of‑dicts into a DataFrame
+        st.subheader("Csv File Preview")     
+        st.dataframe(df_final.head(), use_container_width=True)
+
+        csv_bytes = df_final.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            label="⬇️ Download CSV",
+            data=csv_bytes,
+            file_name="flattened_infringing_urls.csv",
+            mime="text/csv",
+        )
+
+        st.write("\n🔸 Top Root Domains:")
+        st.write(df["root_domain"].value_counts().head(10))
+        st.bar_chart(df["root_domain"].value_counts().head(10), x_label="Domain Name", y_label="Count")
+
+        # IP addresses hosting many distinct domains
+        ip_hosting = (df.groupby("ip_address")["root_domain"]
+                        .nunique()
+                        .sort_values(ascending=False)
+                        .head(10))
+        ip_hosting = ip_hosting[ip_hosting.index != "N/A"]
+
+        st.write("\n🔸 IPs hosting the most *unique* infringing domains:")
+        st.write(ip_hosting)
+        st.bar_chart(ip_hosting, x_label="Unique Domains Hosted", y_label="IP Address",horizontal=True)
+
+        st.write("\n🔸 Top Principals (cleaned):")
+        st.write(df["principal_clean"].value_counts().head(10))
+
+        # Write the enriched and flattened data to CSV
+        write_csv(rows, OUTPUT_CSV)
+        
+        # # Notice volume over time (monthly trend)
+        # df["month"] = pd.to_datetime(df["date_sent"], utc=True).dt.tz_localize(None).dt.to_period("M")
+
+        # trend = df.groupby("month").size()
+        # st.write("\n🔸 Monthly notice volume (last 12):")
+        # st.write(trend.tail(12))
+
+    st.write("Summarizations")
+    #st.write(f"\n✅  CSV written to: {OUTPUT_CSV.resolve()}")
+
+    if __name__ == "__main__":
+        main()
 
 def show_assignment_2():
     """Render Assignment 2 with selectable approaches."""
