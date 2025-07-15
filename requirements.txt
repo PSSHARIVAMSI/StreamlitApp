@@ -1,9 +1,4 @@
-streamlit           # core framework
+streamlit
 pandas
-numpy
-matplotlib
-scikit‑learn        # iris demo
-beautifulsoup4
-lxml                # faster HTML parsing for bs4
+beautifulsoup4      # gives you 'bs4'
 requests
-selenium            # only if you use the Approach‑2 scraper
