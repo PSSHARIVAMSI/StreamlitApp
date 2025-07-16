@@ -1436,7 +1436,6 @@ def main():
     st.sidebar.markdown("**Author:** Siva Mani Subrahmanya Hari Vamsi Pullipudi")
     st.sidebar.markdown("**GMU ID:** G01505434")
     st.sidebar.markdown("**Date:** 15th July 2025")
-    st.link_button("My Portfolio", "https://pssharivamsi.site")
     if selection == "Assignment 1":
         show_assignment_1()
     else:
