@@ -12,11 +12,11 @@ def show_assignment_1():
     """Assignment 1: Json to csv flattening, summarization, visualization."""
     st.subheader("Assignment 1 - Json to csv flattening, Data Summarization & Visualization")
     st.write("---")
-    st.write("R Programming")
+    st.write("**R Programming**")
     st.write("Click the below button to view the R Markdown report for Assignment 1:")
     st.link_button("R Markdown for Assignment 1", "https://rpubs.com/spullipu/1329879")
     st.write("---")
-    st.write("Python Programming")
+    st.write("**Python Programming**")
     code_a1 = """
 #!/usr/bin/env python3
 '''
@@ -42,7 +42,7 @@ import pandas as pd
 import re, requests
 
 # -------- CONFIG -------------------------------------------------------------
-# Google Drive share‑link → file‑ID → direct‑download URL
+# Google Drive share-link → file-ID → direct-download URL
 DRIVE_FILE_ID = "134U6xLIZUZ9sA1BW-X9TLZtUlEYCvQwz"
 INPUT_JSON = (                       # we now pass a URL, not a Path
     f"https://drive.google.com/uc?export=download&id={DRIVE_FILE_ID}"
@@ -60,9 +60,9 @@ def load_json(src: str | Path) -> dict:
     '''
     src_str = str(src)
 
-    # 1️⃣ Remote file ----------------------------------------------------------
+    #1️⃣ Remote file ----------------------------------------------------------
     if src_str.startswith(("http://", "https://")):
-        # Google Drive ‘share’ links need converting to the *download* endpoint
+        # Google Drive ‘share’ links need converting to the *download* endpoint
         m = re.search(r"/d/([^/]+)/", src_str)
         if m:
             file_id = m.group(1)
@@ -71,7 +71,7 @@ def load_json(src: str | Path) -> dict:
         # small files (<100 MB) download in one go; large files may need a second
         with requests.Session() as sess:
             r = sess.get(src_str, timeout=30, stream=True)
-            # If we hit Drive’s virus‑scan / confirm page, grab the token & resend
+            # If we hit Drive’s virus-scan / confirm page, grab the token & resend
             if "content-disposition" not in r.headers:
                 for k, v in r.cookies.items():
                     if k.startswith("download_warning"):
@@ -80,7 +80,7 @@ def load_json(src: str | Path) -> dict:
             r.raise_for_status()
             return r.json()
 
-    # 2️⃣ Local file -----------------------------------------------------------
+    #2️⃣ Local file -----------------------------------------------------------
     with Path(src_str).open("r", encoding="utf-8") as f:
         return json.load(f)
 
@@ -154,7 +154,7 @@ def write_csv(rows: list[dict], out_path: Path) -> None:
     Raises an error if there is no data.
     '''
     if not rows:
-        raise ValueError("No data extracted – check input file.")
+        raise ValueError("No data extracted - check input file.")
     fields = list(rows[0].keys())
     with out_path.open("w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=fields)
@@ -273,7 +273,7 @@ if __name__ == "__main__":
     import re, requests
 
     # -------- CONFIG -------------------------------------------------------------
-    # Google Drive share‑link → file‑ID → direct‑download URL
+    # Google Drive share-link → file-ID → direct-download URL
     DRIVE_FILE_ID = "134U6xLIZUZ9sA1BW-X9TLZtUlEYCvQwz"
     INPUT_JSON = (                       # we now pass a URL, not a Path
         f"https://drive.google.com/uc?export=download&id={DRIVE_FILE_ID}"
@@ -293,7 +293,7 @@ if __name__ == "__main__":
 
         # 1️⃣ Remote file ----------------------------------------------------------
         if src_str.startswith(("http://", "https://")):
-            # Google Drive ‘share’ links need converting to the *download* endpoint
+            # Google Drive ‘share’ links need converting to the *download* endpoint
             m = re.search(r"/d/([^/]+)/", src_str)
             if m:
                 file_id = m.group(1)
@@ -302,7 +302,7 @@ if __name__ == "__main__":
             # small files (<100 MB) download in one go; large files may need a second
             with requests.Session() as sess:
                 r = sess.get(src_str, timeout=30, stream=True)
-                # If we hit Drive’s virus‑scan / confirm page, grab the token & resend
+                # If we hit Drive’s virus-scan / confirm page, grab the token & resend
                 if "content-disposition" not in r.headers:
                     for k, v in r.cookies.items():
                         if k.startswith("download_warning"):
@@ -457,7 +457,7 @@ if __name__ == "__main__":
             return '.'.join(d.split('.')[-2:])    # keep last two labels
 
         df["root_domain"] = df["domain"].apply(root_domain)
-        df_final = pd.DataFrame(rows)          # turn list‑of‑dicts into a DataFrame
+        df_final = pd.DataFrame(rows)          # turn list-of-dicts into a DataFrame
         st.subheader("Csv File Preview")     
         st.dataframe(df_final.head(), use_container_width=True)
 
@@ -490,15 +490,7 @@ if __name__ == "__main__":
         # Write the enriched and flattened data to CSV
         write_csv(rows, OUTPUT_CSV)
         
-        # # Notice volume over time (monthly trend)
-        # df["month"] = pd.to_datetime(df["date_sent"], utc=True).dt.tz_localize(None).dt.to_period("M")
-
-        # trend = df.groupby("month").size()
-        # st.write("\n🔸 Monthly notice volume (last 12):")
-        # st.write(trend.tail(12))
-
     st.write("Summarizations")
-    #st.write(f"\n✅  CSV written to: {OUTPUT_CSV.resolve()}")
 
     if __name__ == "__main__":
         main()
@@ -508,11 +500,11 @@ def show_assignment_2():
     """Render Assignment 2 with selectable approaches."""
     st.subheader("Assignment 2 - Web Scraping & Data Extraction")
     st.write("---")
-    st.write("R Programming")
+    st.write("**R Programming**")
     st.write("Click the below button to view the R Markdown report for Assignment 2:")
     st.link_button("R Markdown for Assignment 2", "https://rpubs.com/spullipu/1329862")
     st.write("---")
-    st.write("Python Programming")
+    st.write("**Python Programming**")
 
     approach = st.radio("Select an approach:", ("Approach 1 - Manual", "Approach 2 - Selenium"))
     st.write("The Web Page to scrape is: https://journals.sagepub.com/toc/JMX/current")
@@ -1009,13 +1001,13 @@ if __name__ == "__main__":
             
             st.write(f"✓ SUCCESS: scraped {len(articles)} articles")
             #save_to_csv(articles)
-            df = pd.DataFrame(articles)          # turn list‑of‑dicts into a DataFrame
+            df = pd.DataFrame(articles)          # turn list-of-dicts into a DataFrame
             st.subheader("Scraped Articles")     
             st.dataframe(df, use_container_width=True)
 
-            csv_bytes = df.to_csv(index=False).encode("utf‑8")
+            csv_bytes = df.to_csv(index=False).encode("utf-8")
             st.download_button(
-                label="⬇️ Download CSV",
+                label="⬇️ Download CSV",
                 data=csv_bytes,
                 file_name="articles.csv",
                 mime="text/csv",
@@ -1429,7 +1421,7 @@ Article Summary:
     # ------------------------------------------------------------
     # 3.  Let users download exactly this CSV
     # ------------------------------------------------------------
-    csv_bytes = df.to_csv(index=False).encode("utf‑8")
+    csv_bytes = df.to_csv(index=False).encode("utf-8")
     st.download_button(
         label="⬇️  Download CSV",
         data=csv_bytes,
@@ -1444,6 +1436,7 @@ def main():
     st.sidebar.markdown("**Author:** Siva Mani Subrahmanya Hari Vamsi Pullipudi")
     st.sidebar.markdown("**GMU ID:** G01505434")
     st.sidebar.markdown("**Date:** 15th July 2025")
+    st.link_button("My Portfolio", "https://pssharivamsi.site")
     if selection == "Assignment 1":
         show_assignment_1()
     else:
